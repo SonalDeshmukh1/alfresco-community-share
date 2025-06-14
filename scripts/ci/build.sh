@@ -66,9 +66,12 @@ else
   buildUpstreamTag "${ENT_UPSTREAM_REPO}" "${ENT_DEPENDENCY_VERSION}" "-Pbuild-docker-images -Pags -Pall-tas-tests -Dlicense.failOnNotUptodateHeader=false"
 fi
 
+export DOCKER_CLI_EXPERIMENTAL=enabled
+export DOCKER_BUILDKIT=1
 
 # Build the current project
 mvn -B -ntp -V install -DskipTests -Dmaven.javadoc.skip=true -Pags "-Dimage.tag=${TAG_NAME}" ${REPO_IMAGE} \
+-Ddocker.platform=linux/amd64, linux/s390x
   $([ "${JOB_NAME,,}" = "build" ] && echo "-Ppush-docker-images" || echo "-Pbuild-docker-images") \
 
 popd
