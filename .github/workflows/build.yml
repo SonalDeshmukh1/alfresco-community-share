@@ -54,41 +54,49 @@ jobs:
       - uses: Alfresco/alfresco-build-tools/.github/actions/setup-java-build@v8.14.1
       - uses: Alfresco/alfresco-build-tools/.github/actions/pre-commit@v7.1.0
 
-  build:
-    runs-on: ubuntu-latest
-    if: >
-      !contains(github.event.head_commit.message, '[no build]') &&
-      inputs.commitMessage != '[no build]' &&
-      !contains(github.event.head_commit.message, '[force') &&
-      inputs.commitMessage != '[force'
-    needs: lint
-    strategy:
-      matrix:
-        stage: [ source_clear ]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: Alfresco/alfresco-build-tools/.github/actions/setup-java-build@v8.14.1
-      - uses: Alfresco/alfresco-build-tools/.github/actions/get-build-info@v7.1.0
-      - name: "Init"
-        run: bash scripts/ci/init.sh
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-      - name: "Prepare before Test"
-        run: |
-          export TAG_NAME="$(echo "${BRANCH_NAME}" | tr / - )"
-          export NAMESPACE="travis-share-$GITHUB_RUN_NUMBER"
-          pip3 install requests pytest==6.2.4 pytest-testinfra==6.3.0 jmespath==0.10.0
-      - name: "Build"
-        timeout-minutes: ${{ fromJSON(env.GITHUB_ACTIONS_DEPLOY_TIMEOUT) }}
-        run: bash scripts/ci/build.sh
-      - name: Run ${{ matrix.stage }}
-        if: ( matrix.stage != 'source_clear' && github.ref_name != 'company_release') || matrix.stage == 'source_clear'
-        run: bash scripts/ci/${{ matrix.stage }}.sh
-        continue-on-error: true
+build:
+  runs-on: ubuntu-latest
+  if: >
+    !contains(github.event.head_commit.message, '[no build]') &&
+    inputs.commitMessage != '[no build]' &&
+    !contains(github.event.head_commit.message, '[force') &&
+    inputs.commitMessage != '[force'
+  needs: lint
+  strategy:
+    matrix:
+      stage: [ source_clear ]
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      with:
+        platforms: linux/amd64,linux/arm64,linux/s390x
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+    - uses: Alfresco/alfresco-build-tools/.github/actions/setup-java-build@v8.14.1
+    - uses: Alfresco/alfresco-build-tools/.github/actions/get-build-info@v7.1.0
+    - name: "Init"
+      run: bash scripts/ci/init.sh
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: "Prepare before Test"
+      run: |
+        export TAG_NAME="$(echo "${BRANCH_NAME}" | tr / - )"
+        export NAMESPACE="travis-share-$GITHUB_RUN_NUMBER"
+        pip3 install requests pytest==6.2.4 pytest-testinfra==6.3.0 jmespath==0.10.0
+    - name: "Build"
+      timeout-minutes: ${{ fromJSON(env.GITHUB_ACTIONS_DEPLOY_TIMEOUT) }}
+      run: |
+        export DOCKER_BUILDKIT=1
+        bash scripts/ci/build.sh --platform linux/amd64,linux/s390x
+    - name: Run ${{ matrix.stage }}
+      if: ( matrix.stage != 'source_clear' && github.ref_name != 'company_release') || matrix.stage == 'source_clear'
+      run: bash scripts/ci/${{ matrix.stage }}.sh
+      continue-on-error: true
 
   veracode_sast_share:
     name: "Pipeline SAST Scan  - Share"
